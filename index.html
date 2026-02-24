@@ -35,7 +35,7 @@
     /* Event colors for categories */
     .fc-event-corporateRecurring { background-color: #D5F0E3; color: #1B3A6B; }
     .fc-event-corporateSpecialty { background-color: #FFE8E8; color: #1B3A6B; }
-    .fc-event-team { background-color: #D6E4F7; color: #1B3A6B; }
+    .fc-event-teamTraining { background-color: #D6E4F7; color: #1B3A6B; }
 
     /* Dark Mode */
     body.dark {
@@ -69,36 +69,34 @@
   <script>
     const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?output=csv";
 
-    // Merge the tabs into a single array
     async function fetchEvents() {
       const res = await fetch(sheetURL);
       const csvText = await res.text();
-
-      // Parse CSV
       const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-      return parsed.data.map(row => {
-        // Determine category based on tab info (you can add a column in sheet for category or detect from title if needed)
-        let category = "Team";
-        if(row.weekday) category = "Corporate Recurring";
-        if(row.frequency.toLowerCase().includes("recurring") && row.weekday === undefined) category = "Corporate Specialty";
 
-        // Parse date & time
-        let eventDate = row.date ? new Date(row.date + " " + row.time + " EST") : null;
+      return parsed.data.map(row => {
+        // Build JS Date object in EST
+        const eventDate = new Date(`${row.date} ${row.time} EST`);
+
+        // Class names for colors
+        let className = '';
+        if(row.category.toLowerCase().includes('corporate recurring')) className = 'fc-event-corporateRecurring';
+        else if(row.category.toLowerCase().includes('corporate specialty')) className = 'fc-event-corporateSpecialty';
+        else className = 'fc-event-teamTraining';
 
         return {
           title: row.title,
-          start: eventDate ? eventDate.toISOString() : null,
+          start: eventDate.toISOString(),
           extendedProps: {
             trainer: row.trainer,
             url: row.url,
-            category: category
+            category: row.category
           },
-          className: "fc-event-" + category.replace(/\s+/g, '')
+          className: className
         };
-      }).filter(e => e.start !== null);
+      });
     }
 
-    // Initialize calendar
     async function initCalendar() {
       const events = await fetchEvents();
 
@@ -115,7 +113,7 @@
         eventClick: function(info) {
           const trainer = info.event.extendedProps.trainer;
           const url = info.event.extendedProps.url;
-          alert(`${info.event.title}\nTrainer: ${trainer}\nLink: ${url}`);
+          window.open(url, '_blank'); // open link directly
         },
         eventDidMount: function(info) {
           info.el.setAttribute('title', `${info.event.title}\nTrainer: ${info.event.extendedProps.trainer}\nLink: ${info.event.extendedProps.url}`);
@@ -125,7 +123,6 @@
       calendar.render();
     }
 
-    // Dark mode toggle
     document.getElementById('toggleDark').addEventListener('click', () => {
       document.body.classList.toggle('dark');
     });
