@@ -44,7 +44,7 @@
       font-weight: bold;
     }
 
-    /* Event colors */
+    /* Event colors by category */
     .fc-event-CorporateRecurring { background-color: #4CAF50 !important; border-color: #388E3C !important; color: white !important; }
     .fc-event-CorporateSpecialty { background-color: #E53935 !important; border-color: #B71C1C !important; color: white !important; }
     .fc-event-Team               { background-color: #1976D2 !important; border-color: #0D47A1 !important; color: white !important; }
@@ -103,28 +103,8 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
 
-    // ── The 3 sheet tabs — update URLs here if they ever change ──────────────
-    const SHEETS = [
-      {
-        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=713283901&single=true&output=csv",
-        category: "CorporateRecurring"
-      },
-      {
-        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=1287723319&single=true&output=csv",
-        category: "CorporateSpecialty"
-      },
-      {
-        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=1823946637&single=true&output=csv",
-        category: "Team"
-      }
-    ];
+    const MASTER_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=525320229&single=true&output=csv";
 
-    const WEEKDAY_MAP = {
-      sunday:0, monday:1, tuesday:2, wednesday:3,
-      thursday:4, friday:5, saturday:6
-    };
-
-    // Parse "8:00 PM" or "14:00" → { hours, minutes }
     function parseTime(str) {
       const m = str.match(/(\d+):(\d+)\s*(AM|PM)?/i);
       if (!m) return null;
@@ -135,41 +115,16 @@
       return { hours: h, minutes: min };
     }
 
-    // Apply a parsed time to a Date object in place
-    function applyTime(date, timeObj) {
-      if (timeObj) date.setHours(timeObj.hours, timeObj.minutes, 0, 0);
-      return date;
+    function parseDate(dateStr) {
+      // Handle YYYY-MM-DD (how Google Sheets exports dates)
+      const iso = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (iso) return new Date(parseInt(iso[1]), parseInt(iso[2]) - 1, parseInt(iso[3]));
+      // Handle M/D/YYYY
+      const mdy = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1]) - 1, parseInt(mdy[2]));
+      return null;
     }
 
-    // Generate all dates within the next 1 month that match weekday + frequency
-    function generateDates(weekday, frequency) {
-      const wdIdx = WEEKDAY_MAP[weekday.toLowerCase().trim()];
-      if (wdIdx === undefined) return [];
-
-      const today = new Date(); today.setHours(0,0,0,0);
-      const end   = new Date(today); end.setMonth(end.getMonth() + 1);
-
-      // Walk from today to end, collecting every matching weekday
-      const days = [];
-      const cur = new Date(today);
-      while (cur.getDay() !== wdIdx) cur.setDate(cur.getDate() + 1);
-      while (cur <= end) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 7); }
-
-      const freq = (frequency || 'every').toLowerCase().trim();
-      return days.filter(d => {
-        const occ = Math.ceil(d.getDate() / 7); // 1st, 2nd, 3rd, 4th occurrence this month
-        if (freq.includes('every'))                              return true;
-        if (freq.includes('1st') && freq.includes('3rd'))       return occ === 1 || occ === 3;
-        if (freq.includes('2nd') && freq.includes('4th'))       return occ === 2 || occ === 4;
-        if (freq.includes('1st'))                               return occ === 1;
-        if (freq.includes('2nd'))                               return occ === 2;
-        if (freq.includes('3rd'))                               return occ === 3;
-        if (freq.includes('4th'))                               return occ === 4;
-        return true;
-      });
-    }
-
-    // Normalise a raw CSV row's keys to lowercase trimmed strings
     function normalizeRow(raw) {
       const row = {};
       for (const k in raw) {
@@ -178,79 +133,47 @@
       return row;
     }
 
-    function fetchCSV(url) {
-      return fetch(url)
-        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
-        .then(csv => Papa.parse(csv, { header: true, skipEmptyLines: true }).data);
+    // Map category text to CSS class name
+    function categoryClass(cat) {
+      const c = cat.toLowerCase();
+      if (c.includes('recurring')) return 'CorporateRecurring';
+      if (c.includes('specialty')) return 'CorporateSpecialty';
+      if (c.includes('team'))      return 'Team';
+      return 'Team'; // default
     }
 
-    // Build a FullCalendar event object
-    function buildEvent(row, start, category, allDay = false) {
-      return {
-        title: row.title || '(No Title)',
-        start,
-        allDay,
-        className: `fc-event-${category}`,
-        extendedProps: {
-          trainer:  row.trainer  || '',
-          url:      row.url      || '',
-          category: category.replace(/([A-Z])/g, ' $1').trim() // "CorporateRecurring" → "Corporate Recurring"
-        }
-      };
-    }
+    async function fetchEvents() {
+      const res = await fetch(MASTER_URL);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const csv = await res.text();
+      const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
 
-    // Process one sheet's rows into calendar events
-    // All 3 tabs share the same columns: title, date OR weekday, time, frequency, trainer, url
-    function processSheet(data, category) {
       const events = [];
-
-      data.forEach((raw, i) => {
+      parsed.data.forEach((raw, i) => {
         const row = normalizeRow(raw);
-        if (!row.title) return;
+        if (!row.title || !row.date) return;
 
-        const timeObj  = row.time ? parseTime(row.time) : null;
-        const dateVal  = (row.date    || '').trim();
-        const weekdayVal = (row.weekday || '').trim();
-
-        // Determine if this row is recurring (weekday name) or a specific date
-        const isSpecificDate = /\d/.test(dateVal); // has a digit → real date like "2/25/2025"
-        const dayName = weekdayVal || (!isSpecificDate ? dateVal : '');
-        const isRecurring = dayName && WEEKDAY_MAP[dayName.toLowerCase().trim()] !== undefined;
-
-        if (isRecurring) {
-          // Generate all matching dates in the next month
-          generateDates(dayName, row.frequency).forEach(date => {
-            const start = applyTime(new Date(date), timeObj);
-            events.push(buildEvent(row, start.toISOString(), category));
-          });
-
-        } else if (isSpecificDate) {
-          let start;
-          // Try M/D/YYYY or MM/DD/YYYY  e.g. 2/23/2026
-          const mdyParts = dateVal.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-          // Try YYYY-MM-DD  e.g. 2026-02-23 (how Google Sheets exports dates in CSV)
-          const isoParts = dateVal.match(/(\d{4})-(\d{2})-(\d{2})/);
-
-          if (mdyParts) {
-            const [_, m, d, y] = mdyParts;
-            start = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-          } else if (isoParts) {
-            const [_, y, m, d] = isoParts;
-            start = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-          } else {
-            start = new Date(dateVal); // fallback
-          }
-          if (timeObj) start.setHours(timeObj.hours, timeObj.minutes, 0, 0);
-
-          if (isNaN(start)) {
-            console.warn(`Row ${i+2} (${category}): could not parse date "${dateVal}" — skipped`);
-            return;
-          }
-          events.push(buildEvent(row, timeObj ? start.toISOString() : dateVal, category, !timeObj));
-
-        } else {
-          console.warn(`Row ${i+2} (${category}): no valid date or weekday found — skipped`);
+        const date = parseDate(row.date);
+        if (!date) {
+          console.warn(`Row ${i + 2}: could not parse date "${row.date}" — skipped`);
+          return;
         }
+
+        const timeObj = row.time ? parseTime(row.time) : null;
+        if (timeObj) date.setHours(timeObj.hours, timeObj.minutes, 0, 0);
+
+        const cat = row.category || 'Team';
+        events.push({
+          title: row.title,
+          start: date.toISOString(),
+          allDay: !timeObj,
+          className: `fc-event-${categoryClass(cat)}`,
+          extendedProps: {
+            trainer:  row.trainer || '',
+            url:      row.url     || '',
+            category: cat
+          }
+        });
       });
 
       return events;
@@ -260,19 +183,14 @@
       document.getElementById('loading').style.display = 'none';
       const el = document.getElementById('error-msg');
       el.style.display = 'block';
-      el.textContent   = msg;
+      el.textContent = msg;
     }
 
     async function initCalendar() {
-      let allEvents = [];
-
+      let events = [];
       try {
-        // Fetch all 3 tabs in parallel
-        const results = await Promise.all(
-          SHEETS.map(s => fetchCSV(s.url).then(data => processSheet(data, s.category)))
-        );
-        allEvents = results.flat();
-        console.log(`Total events loaded: ${allEvents.length}`);
+        events = await fetchEvents();
+        console.log(`Loaded ${events.length} events`);
       } catch (err) {
         console.error(err);
         showError(`⚠️ Could not load events: ${err.message}`);
@@ -282,7 +200,7 @@
       document.getElementById('loading').remove();
 
       const calendarEl = document.getElementById('calendar');
-      const calendar   = new FullCalendar.Calendar(calendarEl, {
+      const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         timeZone: 'local',
         height: 'auto',
@@ -291,15 +209,15 @@
           center: 'title',
           right:  'dayGridMonth,timeGridWeek,listMonth'
         },
-        events: allEvents,
+        events,
         eventClick(info) {
           info.jsEvent.preventDefault();
           const { trainer, url, category } = info.event.extendedProps;
           const msg = [
             `📅 ${info.event.title}`,
-            category  ? `Category: ${category}`  : '',
-            trainer   ? `Trainer: ${trainer}`     : '',
-            url       ? `Link: ${url}`            : 'No link provided'
+            category ? `Category: ${category}` : '',
+            trainer  ? `Trainer: ${trainer}`   : '',
+            url      ? `Link: ${url}`          : 'No link provided'
           ].filter(Boolean).join('\n');
           alert(msg);
           if (url) window.open(url, '_blank');
@@ -312,7 +230,7 @@
             url || ''
           ].filter(Boolean).join('\n');
         },
-        noEventsContent: 'No events found — check your sheets are published as CSV.'
+        noEventsContent: 'No events found — check your sheet is published as CSV.'
       });
 
       calendar.render();
