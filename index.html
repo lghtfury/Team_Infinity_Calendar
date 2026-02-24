@@ -2,23 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Team Infinity Training Calendar</title>
-  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.7/main.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
   <style>
+    * { box-sizing: border-box; }
+
     body {
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
       background-color: #f6f7fb;
       color: #1B3A6B;
-      transition: all 0.3s ease;
+      transition: background-color 0.3s, color 0.3s;
     }
 
     header {
       padding: 1rem;
       text-align: center;
-      /* changed from blue to green for visual verification */
-      background-color: #4CAF50;
+      background-color: #1B3A6B;
       color: white;
       font-size: 1.8rem;
       font-weight: bold;
@@ -33,129 +35,201 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
-    .fc-event-CorporateRecurring { background-color: #D5F0E3; color: #1B3A6B; }
-    .fc-event-CorporateSpecialty { background-color: #FFE8E8; color: #1B3A6B; }
-    .fc-event-Team { background-color: #D6E4F7; color: #1B3A6B; }
+    #loading {
+      text-align: center;
+      padding: 2rem;
+      font-size: 1.1rem;
+      color: #666;
+    }
+
+    #error-msg {
+      display: none;
+      text-align: center;
+      padding: 1rem;
+      color: red;
+      font-weight: bold;
+    }
+
+    .fc-event-CorporateRecurring { background-color: #4CAF50 !important; border-color: #388E3C !important; color: white !important; }
+    .fc-event-CorporateSpecialty { background-color: #E53935 !important; border-color: #B71C1C !important; color: white !important; }
+    .fc-event-Team               { background-color: #1976D2 !important; border-color: #0D47A1 !important; color: white !important; }
 
     /* Dark Mode */
-    body.dark {
-      background-color: #1B1B1B;
-      color: #f6f7fb;
-    }
+    body.dark { background-color: #121212; color: #f6f7fb; }
+    body.dark header { background-color: #0d1f3c; }
+    body.dark #calendar { background-color: #1e1e1e; box-shadow: 0 4px 10px rgba(255,255,255,0.05); }
+    body.dark .fc { color: #f6f7fb; }
+    body.dark .fc-col-header-cell, body.dark .fc-daygrid-day { border-color: #333 !important; }
+    body.dark .fc-toolbar-title { color: #f6f7fb; }
+    body.dark .fc-button { background-color: #333 !important; border-color: #555 !important; color: #fff !important; }
+    body.dark .fc-day-today { background-color: #2a2a2a !important; }
 
-    body.dark header { /* dark-mode variant for green banner */
-      background-color: #2e7d32;
-    }
-    body.dark #calendar { background-color: #1B1B1B; color: #f6f7fb; box-shadow: 0 4px 10px rgba(255,255,255,0.1); }
-
-    button#toggleDark {
+    #toggleDark {
       position: fixed;
-      top: 10px;
-      right: 10px;
+      top: 12px;
+      right: 12px;
       padding: 0.5rem 1rem;
       border: none;
       border-radius: 5px;
       background: #24406F;
       color: white;
       cursor: pointer;
+      font-size: 0.9rem;
+      z-index: 999;
+    }
+    #toggleDark:hover { background: #1a2f52; }
+
+    /* Legend */
+    #legend {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 0.5rem auto 0;
+      max-width: 1100px;
+      padding: 0 1rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+    }
+    .legend-dot {
+      width: 14px; height: 14px;
+      border-radius: 3px;
+      display: inline-block;
     }
   </style>
 </head>
 <body>
   <header>Team Infinity Training Calendar</header>
-  <button id="toggleDark">Toggle Dark Mode</button>
-  <div id="calendar"></div>
+  <button id="toggleDark">🌙 Dark Mode</button>
 
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.7/main.min.js"></script>
+  <div id="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#4CAF50"></span> Corporate Recurring</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#E53935"></span> Corporate Specialty</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#1976D2"></span> Team</div>
+  </div>
+
+  <div id="calendar">
+    <div id="loading">⏳ Loading events...</div>
+    <div id="error-msg"></div>
+  </div>
+
+  <!-- FullCalendar v6 bundle (includes all plugins) -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
   <script>
-    // Link to your MASTER tab CSV
     const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=525320229&single=true&output=csv";
 
+    function showError(msg) {
+      document.getElementById('loading').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.style.display = 'block';
+      el.textContent = msg;
+    }
+
     async function fetchEvents() {
-      try {
-        const res = await fetch(sheetURL);
-        const csvText = await res.text();
-        const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      const res = await fetch(sheetURL);
+      if (!res.ok) throw new Error(`Could not fetch sheet (HTTP ${res.status})`);
+      const csvText = await res.text();
+      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-        const events = parsed.data.map(raw => {
-          // normalize keys so we can handle either Title/Date or title/date etc.
-          const row = {};
-          for (const k in raw) {
-            if (!k) continue;
-            row[k.trim().toLowerCase()] = raw[k].trim();
+      const events = [];
+      parsed.data.forEach((raw, i) => {
+        // Normalize keys to lowercase trimmed
+        const row = {};
+        for (const k in raw) {
+          if (k) row[k.trim().toLowerCase()] = (raw[k] || '').trim();
+        }
+
+        if (!row.date) return; // skip rows without a date
+
+        // Build start — if no time, treat as all-day
+        let start;
+        let allDay = false;
+        if (row.time) {
+          // Try parsing "MM/DD/YYYY" + "HH:MM AM/PM" or "HH:MM"
+          start = new Date(`${row.date} ${row.time}`);
+        } else {
+          start = new Date(row.date);
+          allDay = true;
+        }
+
+        if (isNaN(start)) {
+          console.warn(`Row ${i + 2}: Could not parse date "${row.date} ${row.time}" — skipping`);
+          return;
+        }
+
+        const category = (row.category || 'Team').replace(/\s+/g, '');
+
+        events.push({
+          title: row.title || '(No Title)',
+          start: allDay ? row.date : start.toISOString(),
+          allDay: allDay,
+          className: `fc-event-${category}`,
+          extendedProps: {
+            trainer: row.trainer || '',
+            url: row.url || '',
+            category: row.category || 'Team'
           }
+        });
+      });
 
-          if (!row.date || !row.time) return null;
-
-          // Parse date and time as EST (change or remove timezone as needed)
-          const eventDate = new Date(row.date + " " + row.time + " EST");
-          if (isNaN(eventDate)) return null;
-
-          // Use Category column if exists, otherwise default to Team
-          const category = row.category || "Team";
-
-          return {
-            title: row.title || "", // allow blank title if missing
-            start: eventDate.toISOString(),
-            extendedProps: {
-              trainer: row.trainer || "",
-              url: row.url || "",
-              category: category
-            },
-            className: "fc-event-" + category.replace(/\s+/g, '')
-          };
-        }).filter(e => e !== null);
-        return events;
-      } catch (err) {
-        console.error('Error fetching or parsing sheet data', err);
-        return [];
-      }
+      return events;
     }
 
     async function initCalendar() {
-      const events = await fetchEvents();
-
-      if (events.length === 0) {
-        console.warn('No events returned from sheet; check headers and console for errors.');
+      let events = [];
+      try {
+        events = await fetchEvents();
+      } catch (err) {
+        console.error(err);
+        showError(`⚠️ Could not load events: ${err.message}. Make sure your Google Sheet is published (File → Share → Publish to web → CSV).`);
+        return;
       }
 
-      const calendarEl = document.getElementById("calendar");
+      document.getElementById('loading').remove();
+
+      const calendarEl = document.getElementById('calendar');
       const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         timeZone: 'local',
+        height: 'auto',
         headerToolbar: {
           left: 'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,timeGridDay'
+          right: 'dayGridMonth,timeGridWeek,listMonth'
         },
         events: events,
         eventClick: function(info) {
-          const trainer = info.event.extendedProps.trainer;
-          const url = info.event.extendedProps.url;
-          if(url) window.open(url, "_blank");
-          alert(`${info.event.title}\nTrainer: ${trainer}\nLink: ${url || "No link provided"}`);
+          info.jsEvent.preventDefault();
+          const { trainer, url, category } = info.event.extendedProps;
+          const lines = [
+            `📅 ${info.event.title}`,
+            category ? `Category: ${category}` : '',
+            trainer ? `Trainer: ${trainer}` : '',
+            url ? `Link: ${url}` : ''
+          ].filter(Boolean).join('\n');
+          alert(lines);
+          if (url) window.open(url, '_blank');
         },
         eventDidMount: function(info) {
-          info.el.setAttribute('title', `${info.event.title}\nTrainer: ${info.event.extendedProps.trainer}\nLink: ${info.event.extendedProps.url}`);
-        }
+          const { trainer, url } = info.event.extendedProps;
+          info.el.title = [info.event.title, trainer ? `Trainer: ${trainer}` : '', url || ''].filter(Boolean).join('\n');
+        },
+        noEventsContent: 'No events found — check your sheet is published as CSV.'
       });
 
       calendar.render();
-
-      if (events.length === 0) {
-        // show a small note inside the calendar area when it's empty
-        const notice = document.createElement('div');
-        notice.style.textAlign = 'center';
-        notice.style.color = '#666';
-        notice.style.marginTop = '1rem';
-        notice.textContent = 'No events found – open the console for details.';
-        calendarEl.appendChild(notice);
-      }
     }
 
     document.getElementById('toggleDark').addEventListener('click', () => {
       document.body.classList.toggle('dark');
+      document.getElementById('toggleDark').textContent =
+        document.body.classList.contains('dark') ? '☀️ Light Mode' : '🌙 Dark Mode';
     });
 
     initCalendar();
