@@ -225,10 +225,17 @@
           });
 
         } else if (isSpecificDate) {
-          // One-time event on a specific date
-          const start = timeObj
-            ? new Date(`${dateVal} ${row.time}`)
-            : new Date(dateVal);
+          // Parse M/D/YYYY or MM/DD/YYYY reliably
+          const dateParts = dateVal.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          let start;
+          if (dateParts) {
+            const [_, m, d, y] = dateParts;
+            start = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+            if (timeObj) start.setHours(timeObj.hours, timeObj.minutes, 0, 0);
+          } else {
+            // fallback for other formats
+            start = timeObj ? new Date(`${dateVal} ${row.time}`) : new Date(dateVal);
+          }
 
           if (isNaN(start)) {
             console.warn(`Row ${i+2} (${category}): could not parse date "${dateVal}" — skipped`);
