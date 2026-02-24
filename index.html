@@ -225,17 +225,22 @@
           });
 
         } else if (isSpecificDate) {
-          // Parse M/D/YYYY or MM/DD/YYYY reliably
-          const dateParts = dateVal.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
           let start;
-          if (dateParts) {
-            const [_, m, d, y] = dateParts;
+          // Try M/D/YYYY or MM/DD/YYYY  e.g. 2/23/2026
+          const mdyParts = dateVal.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+          // Try YYYY-MM-DD  e.g. 2026-02-23 (how Google Sheets exports dates in CSV)
+          const isoParts = dateVal.match(/(\d{4})-(\d{2})-(\d{2})/);
+
+          if (mdyParts) {
+            const [_, m, d, y] = mdyParts;
             start = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-            if (timeObj) start.setHours(timeObj.hours, timeObj.minutes, 0, 0);
+          } else if (isoParts) {
+            const [_, y, m, d] = isoParts;
+            start = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
           } else {
-            // fallback for other formats
-            start = timeObj ? new Date(`${dateVal} ${row.time}`) : new Date(dateVal);
+            start = new Date(dateVal); // fallback
           }
+          if (timeObj) start.setHours(timeObj.hours, timeObj.minutes, 0, 0);
 
           if (isNaN(start)) {
             console.warn(`Row ${i+2} (${category}): could not parse date "${dateVal}" — skipped`);
