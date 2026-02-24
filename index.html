@@ -70,35 +70,52 @@
     const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=525320229&single=true&output=csv";
 
     async function fetchEvents() {
-      const res = await fetch(sheetURL);
-      const csvText = await res.text();
-      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+      try {
+        const res = await fetch(sheetURL);
+        const csvText = await res.text();
+        const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
-      return parsed.data.map(row => {
-        if(!row["Date"] || !row["Time"]) return null;
+        const events = parsed.data.map(raw => {
+          // normalize keys so we can handle either Title/Date or title/date etc.
+          const row = {};
+          for (const k in raw) {
+            if (!k) continue;
+            row[k.trim().toLowerCase()] = raw[k].trim();
+          }
 
-        // Parse date and time as EST
-        const eventDate = new Date(row["Date"] + " " + row["Time"] + " EST");
-        if(isNaN(eventDate)) return null;
+          if (!row.date || !row.time) return null;
 
-        // Use Category column if exists, otherwise default to Team
-        const category = row["Category"] || "Team";
+          // Parse date and time as EST (change or remove timezone as needed)
+          const eventDate = new Date(row.date + " " + row.time + " EST");
+          if (isNaN(eventDate)) return null;
 
-        return {
-          title: row["Title"],
-          start: eventDate.toISOString(),
-          extendedProps: {
-            trainer: row["Trainer"] || "",
-            url: row["URL"] || "",
-            category: category
-          },
-          className: "fc-event-" + category.replace(/\s+/g,'')
-        };
-      }).filter(e => e !== null);
+          // Use Category column if exists, otherwise default to Team
+          const category = row.category || "Team";
+
+          return {
+            title: row.title || "", // allow blank title if missing
+            start: eventDate.toISOString(),
+            extendedProps: {
+              trainer: row.trainer || "",
+              url: row.url || "",
+              category: category
+            },
+            className: "fc-event-" + category.replace(/\s+/g, '')
+          };
+        }).filter(e => e !== null);
+        return events;
+      } catch (err) {
+        console.error('Error fetching or parsing sheet data', err);
+        return [];
+      }
     }
 
     async function initCalendar() {
       const events = await fetchEvents();
+
+      if (events.length === 0) {
+        console.warn('No events returned from sheet; check headers and console for errors.');
+      }
 
       const calendarEl = document.getElementById("calendar");
       const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -122,6 +139,16 @@
       });
 
       calendar.render();
+
+      if (events.length === 0) {
+        // show a small note inside the calendar area when it's empty
+        const notice = document.createElement('div');
+        notice.style.textAlign = 'center';
+        notice.style.color = '#666';
+        notice.style.marginTop = '1rem';
+        notice.textContent = 'No events found – open the console for details.';
+        calendarEl.appendChild(notice);
+      }
     }
 
     document.getElementById('toggleDark').addEventListener('click', () => {
