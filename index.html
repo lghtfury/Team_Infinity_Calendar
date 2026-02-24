@@ -32,10 +32,9 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
 
-    /* Event colors for categories */
-    .fc-event-corporateRecurring { background-color: #D5F0E3; color: #1B3A6B; }
-    .fc-event-corporateSpecialty { background-color: #FFE8E8; color: #1B3A6B; }
-    .fc-event-teamTraining { background-color: #D6E4F7; color: #1B3A6B; }
+    .fc-event-CorporateRecurring { background-color: #D5F0E3; color: #1B3A6B; }
+    .fc-event-CorporateSpecialty { background-color: #FFE8E8; color: #1B3A6B; }
+    .fc-event-Team { background-color: #D6E4F7; color: #1B3A6B; }
 
     /* Dark Mode */
     body.dark {
@@ -67,7 +66,8 @@
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.7/main.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script>
-    const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?output=csv";
+    // Link to your MASTER tab CSV
+    const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=525320229&single=true&output=csv";
 
     async function fetchEvents() {
       const res = await fetch(sheetURL);
@@ -75,26 +75,26 @@
       const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
 
       return parsed.data.map(row => {
-        // Build JS Date object in EST
-        const eventDate = new Date(`${row.date} ${row.time} EST`);
+        if(!row["Date"] || !row["Time"]) return null;
 
-        // Class names for colors
-        let className = '';
-        if(row.category.toLowerCase().includes('corporate recurring')) className = 'fc-event-corporateRecurring';
-        else if(row.category.toLowerCase().includes('corporate specialty')) className = 'fc-event-corporateSpecialty';
-        else className = 'fc-event-teamTraining';
+        // Parse date and time as EST
+        const eventDate = new Date(row["Date"] + " " + row["Time"] + " EST");
+        if(isNaN(eventDate)) return null;
+
+        // Use Category column if exists, otherwise default to Team
+        const category = row["Category"] || "Team";
 
         return {
-          title: row.title,
+          title: row["Title"],
           start: eventDate.toISOString(),
           extendedProps: {
-            trainer: row.trainer,
-            url: row.url,
-            category: row.category
+            trainer: row["Trainer"] || "",
+            url: row["URL"] || "",
+            category: category
           },
-          className: className
+          className: "fc-event-" + category.replace(/\s+/g,'')
         };
-      });
+      }).filter(e => e !== null);
     }
 
     async function initCalendar() {
@@ -113,7 +113,8 @@
         eventClick: function(info) {
           const trainer = info.event.extendedProps.trainer;
           const url = info.event.extendedProps.url;
-          window.open(url, '_blank'); // open link directly
+          if(url) window.open(url, "_blank");
+          alert(`${info.event.title}\nTrainer: ${trainer}\nLink: ${url || "No link provided"}`);
         },
         eventDidMount: function(info) {
           info.el.setAttribute('title', `${info.event.title}\nTrainer: ${info.event.extendedProps.trainer}\nLink: ${info.event.extendedProps.url}`);
