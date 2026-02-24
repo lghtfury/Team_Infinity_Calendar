@@ -7,16 +7,13 @@
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
   <style>
     * { box-sizing: border-box; }
-
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       background-color: #f6f7fb;
       color: #1B3A6B;
       transition: background-color 0.3s, color 0.3s;
     }
-
     header {
       padding: 1rem;
       text-align: center;
@@ -25,7 +22,6 @@
       font-size: 1.8rem;
       font-weight: bold;
     }
-
     #calendar {
       max-width: 1100px;
       margin: 2rem auto;
@@ -34,14 +30,12 @@
       border-radius: 10px;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
-
     #loading {
       text-align: center;
       padding: 2rem;
       font-size: 1.1rem;
       color: #666;
     }
-
     #error-msg {
       display: none;
       text-align: center;
@@ -50,6 +44,7 @@
       font-weight: bold;
     }
 
+    /* Event colors */
     .fc-event-CorporateRecurring { background-color: #4CAF50 !important; border-color: #388E3C !important; color: white !important; }
     .fc-event-CorporateSpecialty { background-color: #E53935 !important; border-color: #B71C1C !important; color: white !important; }
     .fc-event-Team               { background-color: #1976D2 !important; border-color: #0D47A1 !important; color: white !important; }
@@ -59,27 +54,23 @@
     body.dark header { background-color: #0d1f3c; }
     body.dark #calendar { background-color: #1e1e1e; box-shadow: 0 4px 10px rgba(255,255,255,0.05); }
     body.dark .fc { color: #f6f7fb; }
-    body.dark .fc-col-header-cell, body.dark .fc-daygrid-day { border-color: #333 !important; }
+    body.dark .fc-col-header-cell,
+    body.dark .fc-daygrid-day { border-color: #333 !important; }
     body.dark .fc-toolbar-title { color: #f6f7fb; }
     body.dark .fc-button { background-color: #333 !important; border-color: #555 !important; color: #fff !important; }
     body.dark .fc-day-today { background-color: #2a2a2a !important; }
 
     #toggleDark {
       position: fixed;
-      top: 12px;
-      right: 12px;
+      top: 12px; right: 12px;
       padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 5px;
-      background: #24406F;
-      color: white;
-      cursor: pointer;
-      font-size: 0.9rem;
+      border: none; border-radius: 5px;
+      background: #24406F; color: white;
+      cursor: pointer; font-size: 0.9rem;
       z-index: 999;
     }
     #toggleDark:hover { background: #1a2f52; }
 
-    /* Legend */
     #legend {
       display: flex;
       gap: 1rem;
@@ -89,17 +80,8 @@
       max-width: 1100px;
       padding: 0 1rem;
     }
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      font-size: 0.85rem;
-    }
-    .legend-dot {
-      width: 14px; height: 14px;
-      border-radius: 3px;
-      display: inline-block;
-    }
+    .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
+    .legend-dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
   </style>
 </head>
 <body>
@@ -117,110 +99,208 @@
     <div id="error-msg"></div>
   </div>
 
-  <!-- FullCalendar v6 bundle (includes all plugins) -->
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-
   <script>
-    const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=525320229&single=true&output=csv";
 
-    function showError(msg) {
-      document.getElementById('loading').style.display = 'none';
-      const el = document.getElementById('error-msg');
-      el.style.display = 'block';
-      el.textContent = msg;
+    // ── The 3 sheet tabs — update URLs here if they ever change ──────────────
+    const SHEETS = [
+      {
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=713283901&single=true&output=csv",
+        category: "CorporateRecurring"
+      },
+      {
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=1287723319&single=true&output=csv",
+        category: "CorporateSpecialty"
+      },
+      {
+        url: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQbKBzguAH_H_n78lMb5NZhgEyqVvxRV3T-oYQV7T98A-1rUOtvU9OzlHKYcIQSpV6XdBvREEJaicME/pub?gid=1823946637&single=true&output=csv",
+        category: "Team"
+      }
+    ];
+
+    const WEEKDAY_MAP = {
+      sunday:0, monday:1, tuesday:2, wednesday:3,
+      thursday:4, friday:5, saturday:6
+    };
+
+    // Parse "8:00 PM" or "14:00" → { hours, minutes }
+    function parseTime(str) {
+      const m = str.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+      if (!m) return null;
+      let h = parseInt(m[1]), min = parseInt(m[2]);
+      const mer = (m[3] || '').toUpperCase();
+      if (mer === 'PM' && h !== 12) h += 12;
+      if (mer === 'AM' && h === 12) h = 0;
+      return { hours: h, minutes: min };
     }
 
-    async function fetchEvents() {
-      const res = await fetch(sheetURL);
-      if (!res.ok) throw new Error(`Could not fetch sheet (HTTP ${res.status})`);
-      const csvText = await res.text();
-      const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+    // Apply a parsed time to a Date object in place
+    function applyTime(date, timeObj) {
+      if (timeObj) date.setHours(timeObj.hours, timeObj.minutes, 0, 0);
+      return date;
+    }
 
+    // Generate all dates within the next 1 month that match weekday + frequency
+    function generateDates(weekday, frequency) {
+      const wdIdx = WEEKDAY_MAP[weekday.toLowerCase().trim()];
+      if (wdIdx === undefined) return [];
+
+      const today = new Date(); today.setHours(0,0,0,0);
+      const end   = new Date(today); end.setMonth(end.getMonth() + 1);
+
+      // Walk from today to end, collecting every matching weekday
+      const days = [];
+      const cur = new Date(today);
+      while (cur.getDay() !== wdIdx) cur.setDate(cur.getDate() + 1);
+      while (cur <= end) { days.push(new Date(cur)); cur.setDate(cur.getDate() + 7); }
+
+      const freq = (frequency || 'every').toLowerCase().trim();
+      return days.filter(d => {
+        const occ = Math.ceil(d.getDate() / 7); // 1st, 2nd, 3rd, 4th occurrence this month
+        if (freq.includes('every'))                              return true;
+        if (freq.includes('1st') && freq.includes('3rd'))       return occ === 1 || occ === 3;
+        if (freq.includes('2nd') && freq.includes('4th'))       return occ === 2 || occ === 4;
+        if (freq.includes('1st'))                               return occ === 1;
+        if (freq.includes('2nd'))                               return occ === 2;
+        if (freq.includes('3rd'))                               return occ === 3;
+        if (freq.includes('4th'))                               return occ === 4;
+        return true;
+      });
+    }
+
+    // Normalise a raw CSV row's keys to lowercase trimmed strings
+    function normalizeRow(raw) {
+      const row = {};
+      for (const k in raw) {
+        if (k) row[k.trim().toLowerCase()] = (raw[k] || '').trim();
+      }
+      return row;
+    }
+
+    function fetchCSV(url) {
+      return fetch(url)
+        .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
+        .then(csv => Papa.parse(csv, { header: true, skipEmptyLines: true }).data);
+    }
+
+    // Build a FullCalendar event object
+    function buildEvent(row, start, category, allDay = false) {
+      return {
+        title: row.title || '(No Title)',
+        start,
+        allDay,
+        className: `fc-event-${category}`,
+        extendedProps: {
+          trainer:  row.trainer  || '',
+          url:      row.url      || '',
+          category: category.replace(/([A-Z])/g, ' $1').trim() // "CorporateRecurring" → "Corporate Recurring"
+        }
+      };
+    }
+
+    // Process one sheet's rows into calendar events
+    // All 3 tabs share the same columns: title, date OR weekday, time, frequency, trainer, url
+    function processSheet(data, category) {
       const events = [];
-      parsed.data.forEach((raw, i) => {
-        // Normalize keys to lowercase trimmed
-        const row = {};
-        for (const k in raw) {
-          if (k) row[k.trim().toLowerCase()] = (raw[k] || '').trim();
-        }
 
-        if (!row.date) return; // skip rows without a date
+      data.forEach((raw, i) => {
+        const row = normalizeRow(raw);
+        if (!row.title) return;
 
-        // Build start — if no time, treat as all-day
-        let start;
-        let allDay = false;
-        if (row.time) {
-          // Try parsing "MM/DD/YYYY" + "HH:MM AM/PM" or "HH:MM"
-          start = new Date(`${row.date} ${row.time}`);
-        } else {
-          start = new Date(row.date);
-          allDay = true;
-        }
+        const timeObj  = row.time ? parseTime(row.time) : null;
+        const dateVal  = (row.date    || '').trim();
+        const weekdayVal = (row.weekday || '').trim();
 
-        if (isNaN(start)) {
-          console.warn(`Row ${i + 2}: Could not parse date "${row.date} ${row.time}" — skipping`);
-          return;
-        }
+        // Determine if this row is recurring (weekday name) or a specific date
+        const isSpecificDate = /\d/.test(dateVal); // has a digit → real date like "2/25/2025"
+        const dayName = weekdayVal || (!isSpecificDate ? dateVal : '');
+        const isRecurring = dayName && WEEKDAY_MAP[dayName.toLowerCase().trim()] !== undefined;
 
-        const category = (row.category || 'Team').replace(/\s+/g, '');
+        if (isRecurring) {
+          // Generate all matching dates in the next month
+          generateDates(dayName, row.frequency).forEach(date => {
+            const start = applyTime(new Date(date), timeObj);
+            events.push(buildEvent(row, start.toISOString(), category));
+          });
 
-        events.push({
-          title: row.title || '(No Title)',
-          start: allDay ? row.date : start.toISOString(),
-          allDay: allDay,
-          className: `fc-event-${category}`,
-          extendedProps: {
-            trainer: row.trainer || '',
-            url: row.url || '',
-            category: row.category || 'Team'
+        } else if (isSpecificDate) {
+          // One-time event on a specific date
+          const start = timeObj
+            ? new Date(`${dateVal} ${row.time}`)
+            : new Date(dateVal);
+
+          if (isNaN(start)) {
+            console.warn(`Row ${i+2} (${category}): could not parse date "${dateVal}" — skipped`);
+            return;
           }
-        });
+          events.push(buildEvent(row, timeObj ? start.toISOString() : dateVal, category, !timeObj));
+
+        } else {
+          console.warn(`Row ${i+2} (${category}): no valid date or weekday found — skipped`);
+        }
       });
 
       return events;
     }
 
+    function showError(msg) {
+      document.getElementById('loading').style.display = 'none';
+      const el = document.getElementById('error-msg');
+      el.style.display = 'block';
+      el.textContent   = msg;
+    }
+
     async function initCalendar() {
-      let events = [];
+      let allEvents = [];
+
       try {
-        events = await fetchEvents();
+        // Fetch all 3 tabs in parallel
+        const results = await Promise.all(
+          SHEETS.map(s => fetchCSV(s.url).then(data => processSheet(data, s.category)))
+        );
+        allEvents = results.flat();
+        console.log(`Total events loaded: ${allEvents.length}`);
       } catch (err) {
         console.error(err);
-        showError(`⚠️ Could not load events: ${err.message}. Make sure your Google Sheet is published (File → Share → Publish to web → CSV).`);
+        showError(`⚠️ Could not load events: ${err.message}`);
         return;
       }
 
       document.getElementById('loading').remove();
 
       const calendarEl = document.getElementById('calendar');
-      const calendar = new FullCalendar.Calendar(calendarEl, {
+      const calendar   = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         timeZone: 'local',
         height: 'auto',
         headerToolbar: {
-          left: 'prev,next today',
+          left:   'prev,next today',
           center: 'title',
-          right: 'dayGridMonth,timeGridWeek,listMonth'
+          right:  'dayGridMonth,timeGridWeek,listMonth'
         },
-        events: events,
-        eventClick: function(info) {
+        events: allEvents,
+        eventClick(info) {
           info.jsEvent.preventDefault();
           const { trainer, url, category } = info.event.extendedProps;
-          const lines = [
+          const msg = [
             `📅 ${info.event.title}`,
-            category ? `Category: ${category}` : '',
-            trainer ? `Trainer: ${trainer}` : '',
-            url ? `Link: ${url}` : ''
+            category  ? `Category: ${category}`  : '',
+            trainer   ? `Trainer: ${trainer}`     : '',
+            url       ? `Link: ${url}`            : 'No link provided'
           ].filter(Boolean).join('\n');
-          alert(lines);
+          alert(msg);
           if (url) window.open(url, '_blank');
         },
-        eventDidMount: function(info) {
+        eventDidMount(info) {
           const { trainer, url } = info.event.extendedProps;
-          info.el.title = [info.event.title, trainer ? `Trainer: ${trainer}` : '', url || ''].filter(Boolean).join('\n');
+          info.el.title = [
+            info.event.title,
+            trainer ? `Trainer: ${trainer}` : '',
+            url || ''
+          ].filter(Boolean).join('\n');
         },
-        noEventsContent: 'No events found — check your sheet is published as CSV.'
+        noEventsContent: 'No events found — check your sheets are published as CSV.'
       });
 
       calendar.render();
